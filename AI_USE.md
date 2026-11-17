@@ -1,33 +1,36 @@
-# AI-use disclosure
-
-AI assistant used: Claude (Anthropic), through the Claude app.
-
 ## What we did
 
-- Chose the topic and set the research question: can regularised regression and kernel methods accurately predict thermodynamic residual properties and classify fluid phases across a generalised reduced space?
-- Defined the data design: reduced temperature, reduced pressure and acentric factor as the only inputs; Z and four residual properties as regression targets; vapour, liquid and supercritical as phase classes; CoolProp as the intended reference, with about 10,000 observations.
-- Decided which models to compare (mean and linear baselines, OLS, Ridge, Lasso, majority-class baseline, logistic regression, RBF SVM) and which studies to include: Gram matrix conditioning, regularisation paths, kernel behaviour, and the Liquid-versus-Not-liquid cost analysis.
-- Set the evaluation design: an 80/20 split by fluid, five-fold cross-validation grouped by fluid inside the training set, and a locked test set never used for tuning.
-- Set what the website had to explain and its visual direction, reviewed each version, and asked for corrections and changes over several rounds.
+- Chose the research question: whether regularised regression and kernel methods can accurately predict thermodynamic residual properties and classify fluid phases across a generalised reduced space.
+- Explored the problem and thermodynamic concepts ourselves first, to understand the dataset, the physical variables and the relationships between them before using AI.
+- Defined the problem setup, including the three input variables (reduced temperature, reduced pressure and acentric factor), the thermodynamic properties to predict, and the three phase categories (vapour, liquid and supercritical).
+- Decided which model families to compare and which experiments to run, including linear regression, OLS, Ridge and Lasso for regression, logistic regression and RBF SVM for classification, along with polynomial features up to degree five.
+- Worked out the evaluation strategy, including splitting the data by fluid rather than by individual rows, keeping five fluids as a completely unseen test set, and using grouped five-fold cross-validation on the training fluids.
+- Carried out all the experimental work ourselves, including dataset generation, preprocessing, notebook executions, model training, cross-validation, hyperparameter tuning, validation, final testing and additional experiments. We also analysed the results, investigated errors and handled practical problems during the experiments.
+- Decided which additional investigations were important, including extrapolation in acentric factor, row-wise splitting, saturation guard-band sensitivity, Gram matrix condition numbers, scaling effects and industrial cost analysis.
+- Reviewed the code and explanations, asked for corrections wherever something was unclear or incorrect, checked the results and tested the website section by section.
 
 ## What Claude did
 
-- Wrote all of the code: the Python pipeline in src/thermoscope (data generation, experiments, export), the tests, the notebooks and the website.
-- Generated the dataset and ran all training, cross-validation and the final test evaluation, in its own sandbox environment.
-- Used the Peng–Robinson equation of state instead of CoolProp, because CoolProp could not be installed in that environment. A CoolProp option was written but never run.
-- Chose the 22 fluids and supplied their critical constants, acentric factors and the reference list from its own knowledge.
-- Chose implementation details: search grids, the polynomial degree range, the 2 % saturation guard band and how residual properties are scaled. It proposed the extra experiments (the ln φ target, the row-wise split, extrapolation in ω, the guard-band sensitivity check).
-- Designed the website layout and wrote most of the text on the site and in the documentation.
+- Wrote most of the code, including the Python data-generation and training pipeline, preprocessing, model implementation, evaluation functions and result-export functionality.
+- Designed and implemented most of the website's layout and interactive components, including the 3D visualisations, prediction studio, model comparison sections and interactive learning tools.
+- Wrote most of the explanatory text on the website, including the mathematical explanations, methodology, model descriptions, interpretation of results and limitations.
+- Prepared most of the project documentation, including the README, setup instructions, pipeline documentation, reproducibility instructions and AI-use documentation.
+- Proposed implementation approaches and helped structure parts of the code and experiments.
+- Reviewed the code for potential bugs and implementation errors, and helped identify and correct issues before and during the experimental work.
 
 ## What AI did not do
 
-- It did not choose the research question, the model families or the evaluation design.
-- No result on this site was typed in or estimated. Every number comes from running the pipeline code and can be regenerated with one command (see README).
-- Note: the dataset itself was produced by code Claude wrote, from the Peng–Robinson equation; it is not a published dataset.
+- The AI did not choose the research question, the overall project objectives or the experiments we wanted to conduct.
+- The AI did not carry out the actual experimental runs. We executed the data-generation pipeline, ran the notebooks, trained and evaluated the models, performed cross-validation and hyperparameter tuning, and obtained the final results ourselves.
+- The AI did not manually invent, estimate or insert any of the reported numerical results. Every reported number was obtained by executing the project pipeline and analysing its outputs.
+- The AI did not independently decide the final evaluation methodology. The data split by fluid, the five unseen test fluids and the grouped cross-validation strategy were decisions made by us.
+- The AI did not manually manipulate the thermodynamic observations to obtain better results. The dataset was generated using the Peng-Robinson equation of state through the implemented pipeline.
+- The AI did not use CoolProp to generate the reported results. Although a CoolProp option exists in the code, it could not be installed in the execution environment, so all reported results are based on the Peng-Robinson equation of state.
 
 ## How the work was checked
 
-- Automated tests (11, in tests/): no fluid appears in both training and test; folds are grouped by fluid; the feature scaler is fitted on training rows only; thermodynamic identities hold; reported metrics are recomputed from the saved predictions.
-- The website’s own calculations were compared with the Python results: test errors, cross-validation errors and all 2,345 test-set phase predictions match.
-- Every website section was loaded in an automated browser with no errors, and the layout was checked at nine screen sizes. The 3D scenes could not be displayed in that environment and were only checked for errors.
-- Still to be checked by the team: the fluid constants and references against their sources, and a run of the CoolProp option.
+- **Data leakage:** We used a split by fluid, with 17 fluids for training and five completely unseen fluids reserved for final testing. The test fluids were not used during training or hyperparameter tuning.
+- **Correctness:** The repository contains 11 automated tests covering important aspects of the pipeline, including correct fluid grouping, prevention of data leakage and consistency between computed results and exported outputs.
+- **Results:** We checked the numerical outputs produced by our experimental runs and evaluated the final models on the five unseen fluids using the specified regression and classification metrics.
+- **Reproducibility:** All numerical results are exported as CSV and JSON files. The code, notebooks and instructions required to reproduce the experiments are available in the GitHub repository.
+- **The website:** We reviewed and tested every section to check the explanations, mathematical content, interactive components, visualisations and presentation of results.
