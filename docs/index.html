@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermoscope</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=STIX+Two+Text:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <a class="brand" href="#research" aria-label="Thermoscope home"><i></i>THERMOSCOPE</a>
+  <nav aria-label="Main">
+    <a href="#question">Question</a>
+    <a href="#dataset">Data</a>
+    <a href="#regression">Regression</a>
+    <a href="#evaluation">Results</a>
+    <a href="#studio">Studio</a>
+    <a href="#repro">Repository</a>
+  </nav>
+  <span class="sp"></span>
+  <button class="searchbtn" id="lite" type="button" title="Switch 3D rendering quality">3D: High</button>
+  <button class="searchbtn" data-open-search type="button" aria-label="All laboratories and search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg><span>Labs</span><span class="long">&nbsp;· all 15</span></button>
+</header>
+<div class="ovl" id="search" role="dialog" aria-label="Laboratories">
+  <div class="box"><input id="searchinput" type="search" placeholder="Find a laboratory or concept" autocomplete="off"><div class="out"></div></div>
+</div>
+<div id="sp" aria-hidden="true"></div>
+<main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="data/data.js"></script>
+<script src="js/ml.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/kit3d.js"></script>
+<script src="js/core.js"></script>
+<script src="js/labs-a.js"></script>
+<script src="js/labs-b.js"></script>
+<script src="js/labs-c.js"></script>
+<script src="js/labs-d.js"></script>
+<script>U.boot();</script>
+</body>
+</html>

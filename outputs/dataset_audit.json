@@ -1,0 +1,26 @@
+{
+ "backend": "pr",
+ "backend_version": "Peng-Robinson (1976), thermoscope.eos_pr",
+ "seed": 20261115,
+ "n_fluids": 22,
+ "requested": 10340,
+ "valid": 10308,
+ "rejected": {
+  "saturation_guard": 32,
+  "invalid_state": 0,
+  "ambiguous_phase": 0,
+  "backend_error": 0
+ },
+ "duplicates_removed": 0,
+ "missing_values": 0,
+ "guard_band": 0.02,
+ "tr_range": [
+  0.6,
+  1.6
+ ],
+ "pr_range": [
+  0.03,
+  3.0
+ ],
+ "sampling": "per fluid: Tr ~ Uniform, ln Pr ~ Uniform; states with |ln(Pr/Psat)| < guard_band excluded"
+}

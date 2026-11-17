@@ -1,0 +1,40 @@
+{
+ "seed": 20261115,
+ "design": "GroupShuffleSplit(test_size=0.2) by fluid; GroupKFold(5) inside training fluids",
+ "test_fluids": [
+  "Methane",
+  "n-Hexane",
+  "Ethylene",
+  "Water",
+  "Hydrogen sulfide"
+ ],
+ "folds": {
+  "1": [
+   "Propylene",
+   "Nitrogen",
+   "Carbon dioxide",
+   "R-134a"
+  ],
+  "2": [
+   "Propane",
+   "Oxygen",
+   "Argon",
+   "Sulfur dioxide"
+  ],
+  "3": [
+   "n-Heptane",
+   "n-Octane",
+   "Carbon monoxide"
+  ],
+  "4": [
+   "Isobutane",
+   "n-Pentane",
+   "Benzene"
+  ],
+  "5": [
+   "Ethane",
+   "n-Butane",
+   "Ammonia"
+  ]
+ }
+}

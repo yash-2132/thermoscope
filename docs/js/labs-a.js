@@ -1,0 +1,301 @@
+/* Laboratories 01-05: research, dataset, regression, Gram matrix, regularisation. */
+(function () {
+  'use strict';
+  const el = U.el, f = U.fmt, D = TS.D, R = D.rows, clamp = (x, a, b) => Math.min(b, Math.max(a, x)), nTest = D.fluids.filter(x => x.test).length, DEG = D.reg.degree;
+  const pct = x => f(x * 100, 3) + ' %';
+
+  /* ================= 01 RESEARCH ================= */
+  U.lab({
+    id: 'research', num: '01', title: 'Research & problem', full: true, blurb: 'The question, the data and the doorway to every laboratory.',
+    lead: 'Can simple, inspectable models learn real-fluid thermodynamics?',
+    render(app) {
+      const sm = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }, nearest = w => D.fluids.reduce((a, b) => Math.abs(b.w - w) < Math.abs(a.w - w) ? b : a).name;
+      const hud = U.readout([{ k: 'w', label: 'Acentric factor ω' }, { k: 'f', label: 'Nearest fluid' }, { k: 'n', label: 'State points' }, { k: 'e', label: 'Largest |Z error|, Ridge' }]); hud.className = 'hud';
+      const beats = [
+        el('div', { class: 'beat on' }, el('div', { class: 'eyebrow' }, 'Computational thermodynamics × machine learning'), el('h1', { style: 'white-space:nowrap', html: '<em>THERMOSCOPE</em>' }), el('p', { class: 'sub' }, 'A research laboratory for learning real-fluid behaviour: ' + D.fluids.length + ' fluids, ' + TS.N + ' state points, eleven interactive experiments in regression, numerical linear algebra and kernel methods.'),
+          el('div', { class: 'btns' }, el('a', { class: 'btn pri', href: '#regression' }, 'ENTER THE LABORATORY →'), el('button', { class: 'btn', type: 'button', onclick: () => window.scrollTo({ top: hero.offsetTop + 0.34 * (hero.offsetHeight - innerHeight), behavior: U.reduced() ? 'auto' : 'smooth' }) }, 'SCROLL THE STORY ↓'))),
+        el('div', { class: 'beat' }, el('div', { class: 'eyebrow' }, 'Scene 2 · The data'), el('h2', {}, TS.N + ' observations'), el('p', { class: 'sub' }, 'Every particle is one row of the dataset: a reduced temperature, a reduced pressure and the compressibility factor an equation of state returns there. The sheet beneath them is the reference surface, breathing as the acentric factor ω sweeps from argon-like to octane-like fluids.')),
+        el('div', { class: 'beat' }, el('div', { class: 'eyebrow' }, 'Scene 3 · The model'), el('h2', {}, 'A polynomial learns the surface'), el('p', { class: 'sub' }, 'The green sheet is the trained Ridge regression, ' + (D.reg.powers.length + 1) + ' coefficients fitted on ' + (D.fluids.length - nTest) + ' fluids. Over most of the state space it lies on the reference.')),
+        el('div', { class: 'beat' }, el('div', { class: 'eyebrow' }, 'Scene 4 · The finding'), el('h2', {}, 'It cannot learn the cliff'), el('p', { class: 'sub' }, 'Orange marks where model and reference disagree. The error lives on the liquid–vapour transition, where the true surface jumps and no smooth function can follow. That one fact shapes every result in this project.'), el('div', { class: 'btns' }, el('a', { class: 'btn pri', href: '#regression' }, 'Open the regression laboratory →'), el('a', { class: 'btn', href: '#studio' }, 'Prediction studio'), el('a', { class: 'btn', href: '#findings' }, 'Findings')))];
+      const prog = el('div', { class: 'prog' }, ...['Manifold', 'Observations', 'Model', 'Finding'].map(t => el('span', {}, t)));
+      const canvas = el('canvas', { class: 'gl', 'aria-label': 'Compressibility-factor surface over reduced temperature and pressure, with dataset points and the learned model surface', role: 'img' });
+      const stick = el('div', { class: 'stick' }, canvas, el('div', { class: 'veil' }), hud, el('div', { class: 'copy' }, ...beats), prog), hero = el('section', { class: 'hero', 'aria-label': 'Introduction' }, stick); app.append(hero);
+      const stage = K3.stage(stick, { canvas, orbit: false, fov: 34, offset: (w, h) => w > h * 1.15 ? 0.17 : 0, fallback: TS.fallback(0.152, 'Z') });
+      let sRef, sMl, cloud, lamp; const ridge = TS.official('Z', 'ridge').f, n = TS.NX;
+      if (stage) {
+        stage.floor(); sRef = TS.surface(stage, { metalness: 0.6, roughness: 0.22, wire: 0.2 }); sMl = TS.surface(stage, { transparent: true, opacity: 0, depthWrite: false, wire: 0.25 }); sMl.visible = false;
+        const step = K3.lite ? 3 : 1, m = Math.ceil(TS.N / step); cloud = TS.cloud(stage, m, 0.075); for (let q = 0; q < m; q++) { const i = q * step, p = sRef.at(R.Tr[i], R.Pr[i], R.Z[i], 0, 1.3); p.y += 0.02; cloud.set(q, p, [190, 235, 255]); } cloud.commit(); cloud.points.material.opacity = 0; cloud.points.material.blending = THREE.AdditiveBlending;
+        lamp = new THREE.PointLight(0x9fe8ff, 2.4, 5, 2); stage.scene.add(lamp);
+      }
+      const CAM = [[5.8, 3.3, 6.6, 1.15], [3.9, 2.7, 5.2, 1.2], [5.4, 1.7, 3.6, 1.1], [1.2, 6.0, 4.8, 0.9]]; let ps = 0, fr = 0, emax = 0;
+      U.loop((dt, t) => {
+        const span = hero.offsetHeight - innerHeight, p = clamp((scrollY - hero.offsetTop) / Math.max(1, span), 0, 1); ps += (p - ps) * Math.min(1, dt * (U.reduced() ? 60 : 5));
+        const w = U.reduced() || !stage ? 0.152 : 0.2 + 0.19 * Math.sin(t * 0.33), b = ps < 0.2 ? 0 : ps < 0.47 ? 1 : ps < 0.74 ? 2 : 3;
+        beats.forEach((e, i) => e.classList.toggle('on', i === b)); [...prog.children].forEach((e, i) => e.classList.toggle('on', i <= b));
+        hud.set({ w: w.toFixed(3), f: nearest(w), n: String(TS.N), e: ps > 0.45 ? f(emax, 3) : 'scroll to reveal' });
+        if (!stage || (fr++ % 2 && !U.reduced())) return;
+        const ref = TS.refField(w, 'Z'), aM = sm((ps - 0.45) / 0.14), aE = sm((ps - 0.72) / 0.12); let ml = null;
+        if (aM > 0.01) { ml = TS.field(w, 'Z', ridge); emax = 0; for (let i = 0; i < n * n; i++) emax = Math.max(emax, Math.abs(ml[i] - ref[i])); sMl.setData(ml, 0, 1.3, () => [98, 219, 166]); }
+        sMl.visible = aM > 0.01; sMl.material.opacity = 0.6 * aM * (1 - 0.6 * aE); if (sMl.wire) sMl.wire.material.opacity = 0.25 * aM;
+        sRef.setData(ref, 0, 1.3, (i, j, v) => { const u = clamp(v / 1.15, 0, 1), c = [18 + 108 * u + 110 * u * u, 70 + 154 * u, 190 + 65 * u]; if (!ml || aE < 0.01) return c; const k = Math.min(1, Math.abs(ml[j * n + i] - v) / 0.25) * aE; return [c[0] + (255 - c[0]) * k, c[1] + (107 - c[1]) * k, c[2] + (58 - c[2]) * k]; });
+        cloud.points.material.opacity = 0.9 * sm((ps - 0.18) / 0.14) * (1 - 0.5 * aE);
+        const x = ps * 3, i = Math.min(2, Math.floor(x)), u = sm(x - i), A = CAM[i], B = CAM[i + 1], tall = stage.camera.aspect < 0.85, z = tall ? 1.6 : 1, pt = U.reduced() ? [0, 0] : stage.pointer();
+        stage.setCam([(A[0] + (B[0] - A[0]) * u + pt[0] * 0.9) * z, (A[1] + (B[1] - A[1]) * u - pt[1] * 0.5) * z, (A[2] + (B[2] - A[2]) * u) * z], [0, A[3] + (B[3] - A[3]) * u - (tall ? 1.5 : 0), 0]);
+        lamp.position.set(pt[0] * 3.2, 1.9, pt[1] * 3.2);
+      });
+      const page = el('div', { class: 'page' }); app.append(el('div', { class: 'shell' }, U.rail(), page));
+      const rd = U.readout([{ k: 'a', label: 'State points' }, { k: 'b', label: 'Fluids: train | locked test' }, { k: 'c', label: 'Polynomial features, degree ' + DEG }, { k: 'd', label: 'Ridge test RMSE on Z' }, { k: 'e', label: 'RBF-SVM test macro-F1' }, { k: 'g', label: 'Logistic test macro-F1' }]);
+      rd.set({ a: String(TS.N), b: (D.fluids.length - nTest) + ' | ' + nTest, c: String(D.reg.powers.length), d: f(D.reg.targets.Z.ridge.test.rmse, 3), e: f(D.cls.svm.test.macroF1, 3), g: f(D.cls.lr.test.macroF1, 3) });
+      page.append(el('section', { class: 'step', style: 'margin-top:10px' }, el('div', { class: 'lab' }, el('b', {}, '01'), 'Research overview'), el('h2', {}, 'Can inspectable models learn real-fluid thermodynamics?'), el('p', { class: 'lead', style: 'margin-bottom:22px', html: '<strong>Thermoscope</strong> trains polynomial regressions and kernel classifiers on equation-of-state data for ' + D.fluids.length + ' fluids, then tests them on fluids they have never seen.' }), rd));
+      const idx = el('div', { class: 'idx' }); U.labs.forEach(c => idx.append(el('a', { href: '#' + c.id }, el('span', { class: 'n' }, c.num), el('h3', {}, c.title), el('p', {}, c.blurb))));
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, 'A'), 'Eleven laboratories'), idx));
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, 'B'), 'The research question'), el('div', { class: 'flow' }, ...[
+        ['Problem', 'Process simulators call an equation of state millions of times. Could a cheap learned surrogate return Z, residual energies and the phase directly from reduced temperature, reduced pressure and acentric factor?'],
+        ['Regression task', 'Predict five dimensionless properties, Z, a^{r}/RT, h^{r}/RT, s^{r}/R and g^{r}/RT, from (T_r, P_r, ω) with polynomial OLS, Ridge and Lasso.'],
+        ['Classification task', 'Predict the phase, vapour, liquid or supercritical, with multinomial logistic regression and an RBF support vector machine.'],
+        ['Central difficulty', 'Polynomial features of three inputs are strongly correlated, so the Gram matrix X^{T}X becomes ill-conditioned as degree rises; and the target itself jumps across the saturation line.'],
+        ['Honest test', 'Whole fluids are held out. ' + nTest + ' fluids form a locked test set that no model, threshold or hyper-parameter ever saw.'],
+        ['Data source', 'This build computes its dataset from the Peng–Robinson equation of state, not from CoolProp, which was not available in the build environment. Limitations & conclusions explains what that changes.']
+      ].map(r => el('div', { class: 'fl' }, el('b', {}, r[0]), el('span', { html: U.eq(r[1]) }))))));
+    }
+  });
+
+  /* ================= 02 DATASET ================= */
+  U.lab({
+    id: 'dataset', num: '02', title: 'Dataset laboratory', tags: ['Peng–Robinson reference', 'Grouped by fluid'], blurb: 'Where every row comes from, how the phases are labelled and which fluids are locked away.', keys: 'data fluids acentric split phase',
+    lead: 'Every model on this site learns from the same table: ' + TS.N + ' state points, ' + D.meta.nper + ' per fluid, sampled uniformly in T_r from 0.6 to 1.6 and log-uniformly in P_r from 0.03 to 3.',
+    render(page) {
+      U.exp(page, {
+        n: '1', title: 'Compute one row yourself', problem: 'What exactly is a training example?', idea: 'A state (T_r, P_r) of a fluid with acentric factor ω, plus the properties an equation of state returns there.',
+        assume: 'Peng–Robinson (1976) describes the fluid. Where the cubic has three real roots, the root with the lower fugacity is the stable phase.',
+        eq: [['Z^{3} − (1−B)Z^{2} + (A − 3B^{2} − 2B)Z − (AB − B^{2} − B^{3}) = 0', 'A = 0.45724 α P_r / T_r^{2},  B = 0.07780 P_r / T_r,  α = [1 + κ(1 − √T_r)]^{2},  κ = 0.37464 + 1.54226ω − 0.26992ω^{2}']],
+        try: 'Set T_r = 0.85 and sweep P_r upward. Watch three roots appear, then the stable root jump from vapour to liquid.', thermo: 'In reduced variables the Peng–Robinson surface depends on ω alone, so fluids differ only through one number.', conclude: 'Each row is exact for the chosen equation of state: there is no measurement noise in this dataset.',
+        model: 'Computed live in your browser with the same formulas the offline pipeline used; residual properties are relative to an ideal gas at the same temperature and density (the CoolProp convention) and divided by RT or R.',
+        build(B, res) {
+          const S = { fl: TS.defaultFluid, Tr: 0.85, Pr: 0.2 }, rd = U.readout([{ k: 'ph', label: 'Phase label' }, { k: 'n', label: 'Real roots' }, { k: 'Z', label: 'Z (stable root)' }, { k: 'ps', label: 'Saturation P_r at this T_r' }, { k: 'ar', label: 'aʳ/RT' }, { k: 'hr', label: 'hʳ/RT' }, { k: 'sr', label: 'sʳ/R' }, { k: 'gr', label: 'gʳ/RT' }]);
+          const pw = el('div'); B.side.append(el('div', { class: 'fgrid' }, TS.fluidSelect('dsfl', S.fl, v => { S.fl = v; upd(); })), U.slider({ label: 'Reduced temperature T_r', min: 0.6, max: 1.6, step: 0.01, value: S.Tr, on: v => { S.Tr = v; upd(); } }).el, U.slider({ label: 'Reduced pressure P_r (log scale)', min: -1.52, max: 0.477, step: 0.01, value: Math.log10(S.Pr), fmt: v => f(Math.pow(10, v), 3), on: v => { S.Pr = Math.pow(10, v); upd(); } }).el, rd);
+          B.below.append(pw); const plot = new U.Plot(pw, { title: 'Z along this isotherm (all real roots shown)', xlabel: 'Pr', ylabel: 'Z', xlog: true, h: 280, xr: [0.03, 3], yr: [0, 1.25] });
+          function upd() {
+            const w = D.fluids[S.fl].w, r = ML.prRoots(S.Tr, S.Pr, w), st = ML.pr(S.Tr, S.Pr, w), ph = ML.phase(S.Tr, S.Pr, w), ps = ML.psat(S.Tr, w);
+            rd.set({ ph: TS.PH[ph], n: String(r.length), Z: st.Z, ps: isNaN(ps) ? 'above critical' : f(ps, 4), ar: st.ar, hr: st.hr, sr: st.sr, gr: st.gr });
+            const st2 = [], all = []; for (let i = 0; i <= 160; i++) { const P = 0.03 * Math.pow(100, i / 160); st2.push([P, ML.pr(S.Tr, P, w).Z]); ML.prRoots(S.Tr, P, w).forEach(q => all.push([P, q.Z])); }
+            plot.set({ series: [{ pts: all, dots: true, r: 1.2, color: U.col.dim }, { pts: st2, color: TS.MC.ref, width: 2.2 }], points: [{ x: S.Pr, y: st.Z, ring: true, color: TS.PHC[ph], label: TS.PH[ph] }] });
+            res(D.fluids[S.fl].name + ' (ω = ' + w + ') at T_r = ' + f(S.Tr, 3) + ', P_r = ' + f(S.Pr, 3) + ': ' + r.length + ' real root' + (r.length > 1 ? 's' : '') + ', stable Z = ' + f(st.Z, 4) + ', labelled <b>' + TS.PH[ph] + '</b>.');
+          }
+          upd();
+        }
+      });
+      U.exp(page, {
+        n: '2', title: 'The state space and its labels', problem: 'How are the three phase classes distributed?', idea: 'Colour every observation by its reference phase in the (T_r, P_r) plane.', assume: 'Labels follow CoolProp’s phase regions. Liquid and vapour exist only where T_r < 1 and P_r < 1, separated by the saturation curve. Everything else (CoolProp’s supercritical, supercritical_gas and supercritical_liquid) is grouped as Supercritical. States within 2 % of the saturation pressure are excluded.',
+        try: 'Switch between a light fluid such as Argon and a heavy one such as n-Octane. The saturation curve moves with ω.', thermo: 'The boundary a classifier has to learn is the vapour-pressure curve, which is close to a straight line in ln P_r against 1/T_r.', conclude: 'The classes are unbalanced, and the liquid and vapour regions are bounded by one curve and two straight lines.',
+        build(B, res) {
+          const S = { fl: -1 }, pw = el('div'); B.side.append(el('div', { class: 'ctl' }, el('span', {}, 'Show')), U.seg([[-1, 'All fluids'], [TS.defaultFluid, D.fluids[TS.defaultFluid].name], [D.fluids.findIndex(x => x.name === 'Argon'), 'Argon'], [D.fluids.findIndex(x => x.name === 'n-Octane'), 'n-Octane']], S.fl, v => { S.fl = +v; upd(); }, 'Fluids'), TS.phaseKey([['Saturation curve', '#fff']]), pw);
+          const plot = new U.Plot(pw, { title: 'Observations in reduced state space', xlabel: 'Tr', ylabel: 'Pr', ylog: true, h: 380, xr: [0.58, 1.62], yr: [0.028, 3.2] }), cnt = el('div', { class: 'scroll' }); B.below.append(cnt);
+          function upd() {
+            const idx = S.fl < 0 ? Array.from({ length: TS.N }, (_, i) => i) : TS.rowsOf(S.fl), c = [0, 0, 0]; idx.forEach(i => c[R.ph[i]]++);
+            plot.set({ series: [{ pts: idx.map(i => [R.Tr[i], R.Pr[i]]), dots: true, r: S.fl < 0 ? 1.3 : 2.6, colors: idx.map(i => TS.PHC[R.ph[i]]), shapes: idx.map(i => R.ph[i]), alpha: .85 }].concat(S.fl < 0 ? [] : [{ pts: TS.sat(D.fluids[S.fl].w), color: '#fff', width: 1.6 }]) });
+            cnt.innerHTML = '<table class="t"><tr><th>Phase</th><th>Rows</th><th>Share</th><th></th></tr>' + c.map((n, k) => '<tr><td style="color:' + TS.PHC[k] + '">' + TS.PH[k] + '</td><td class="n">' + n + '</td><td class="n">' + pct(n / idx.length) + '</td><td><div class="bar"><i style="width:' + (n / idx.length * 100) + '%"></i></div></td></tr>').join('') + '</table>';
+            res('Of ' + idx.length + ' rows, ' + pct(c[0] / idx.length) + ' are vapour, ' + pct(c[1] / idx.length) + ' liquid and ' + pct(c[2] / idx.length) + ' supercritical.');
+          }
+          upd();
+        }
+      });
+      U.exp(page, {
+        n: '3', title: 'The dataset in three dimensions', stage: true, problem: 'What does the whole feature space look like at once?', idea: 'Place every observation at its three model inputs: T_r across, P_r in depth and ω as height.', assume: 'Axes are T_r (linear), P_r (logarithmic) and ω (linear, −0.01 to 0.40).',
+        try: 'Rotate until you look along the ω axis: the fluids collapse onto one map. Tilt back: each fluid is a horizontal sheet, and the liquid region grows as ω rises. Switch colouring to “Split role” to see which sheets are locked away.', thermo: 'A fluid never moves vertically in this space: ω is a constant of the substance. Generalising to a new fluid means predicting on a sheet that lies between the training sheets.', conclude: 'The feature space is sampled densely in T_r and P_r but only at 22 heights in ω. The models interpolate across ω from very few distinct values.',
+        model: 'All ' + TS.N + ' real rows of the dataset, drawn as particles. Nothing is simulated here.',
+        build(B, res) {
+          const S = { mode: 'phase', show: 'all', ph: -1, fl: -1 }, pick = el('div', { class: 'scroll' }), stage = K3.stage(B.stage, { cam: [4.9, 3.1, 5.8], target: [0, 1.25, 0], autoRotate: true, label: 'Dataset observations in Tr, Pr, omega space', hint: 'One sheet per fluid · drag or arrow keys to rotate', fallback: TS.fallback(0.152, 'Z') }); let cl = null;
+          if (stage) { stage.floor(); cl = TS.cloud(stage, TS.N, K3.lite ? 0.05 : 0.065); TS.axes(stage, 'ω ↑'); }
+          const rd = U.readout([{ k: 'n', label: 'Particles shown' }, { k: 'l', label: 'Distinct ω levels' }, { k: 'r', label: 'ω range' }]);
+          B.side.append(el('div', { class: 'ctl' }, el('span', {}, 'Colour by')), U.seg([['phase', 'Phase'], ['role', 'Split role'], ['Z', 'Value of Z']], S.mode, v => { S.mode = v; upd(); }, 'Colour'), el('div', { class: 'ctl', style: 'margin-top:12px' }, el('span', {}, 'Show')), U.seg([['all', 'All fluids'], ['train', 'Training fluids'], ['test', 'Locked test fluids']], S.show, v => { S.show = v; upd(); }, 'Show'), el('div', { class: 'ctl', style: 'margin-top:12px' }, el('span', {}, 'Phase filter')), U.seg([[-1, 'All'], [0, 'Vapour'], [1, 'Liquid'], [2, 'Supercritical']], -1, v => { S.ph = +v; upd(); }, 'Phase filter'),
+            el('div', { class: 'fgrid', style: 'margin-top:12px' }, (() => { const s = el('select', { class: 'inp', id: 'unifl', onchange: () => { S.fl = +s.value; upd(); } }, el('option', { value: -1 }, 'All fluids'), ...D.fluids.map((x, i) => el('option', { value: i }, x.name + (x.test ? ' · held out' : '')))); return el('label', { class: 'field', for: 'unifl' }, 'Find a fluid', s); })()),
+            el('div', { style: 'height:10px' }), rd, TS.phaseKey([['Training fluid (role view)', '#4da3ff'], ['Locked test fluid (role view)', '#ff6b3a']]), el('div', { class: 'h4', style: 'margin-top:6px' }, 'Selected observation (click a particle)'), pick);
+          const showRow = i => { pick.innerHTML = U.eq('<table class="mat"><tr><th>fluid</th><th>T_r</th><th>P_r</th><th>ω</th><th>phase</th><th>Z</th><th>aʳ/RT</th><th>hʳ/RT</th><th>sʳ/R</th><th>gʳ/RT</th></tr>') + '<tr><td>' + D.fluids[R.fi[i]].name + '</td><td>' + [R.Tr[i], R.Pr[i], TS.w(i)].map(v => f(v, 4)).join('</td><td>') + '</td><td style="color:' + TS.PHC[R.ph[i]] + '">' + TS.PH[R.ph[i]] + '</td><td>' + ['Z', 'ar', 'hr', 'sr', 'gr'].map(t => f(TS.val(i, t), 4)).join('</td><td>') + '</td></tr></table>'; };
+          pick.innerHTML = '<p class="note">Nothing selected yet. Click any particle in the 3D view to read its row of the dataset.</p>'; let vis = [];
+          if (stage) stage.renderer.domElement.addEventListener('click', e => { const i = stage.pick(cl.points, e, k => vis[k]); if (i >= 0) showRow(i); });
+          function upd() {
+            let shown = 0; vis = new Array(TS.N); for (let i = 0; i < TS.N; i++) { const fl = D.fluids[R.fi[i]], on = (S.show === 'all' || (S.show === 'test') === fl.test) && (S.ph < 0 || R.ph[i] === S.ph) && (S.fl < 0 || R.fi[i] === S.fl), c = S.mode === 'phase' ? TS.PHRGB[R.ph[i]] : S.mode === 'role' ? (fl.test ? [255, 107, 58] : [77, 163, 255]) : (u => [30 + 225 * u, 90 + 165 * u, 255])(Math.min(1, R.Z[i] / 1.15)); vis[i] = on; if (on) shown++; if (cl) cl.set(i, TS.xyz(R.Tr[i], R.Pr[i], 0.2 + (fl.w + 0.01) / 0.41 * 2.2), c, on ? 1 : 0.07); }
+            if (cl) cl.commit(); const ws = D.fluids.map(x => x.w); rd.set({ n: String(shown), l: String(new Set(ws).size), r: Math.min(...ws) + ' to ' + Math.max(...ws) });
+            res(shown + ' observations shown across ' + D.fluids.filter(x => S.show === 'all' || (S.show === 'test') === x.test).length + ' fluids. Held-out fluids sit at ω = ' + D.fluids.filter(x => x.test).map(x => x.w).sort((p, q) => p - q).join(', ') + ', all inside the range covered by training fluids.');
+          }
+          upd();
+        }
+      });
+      const tb = '<table class="t"><tr><th>Fluid</th><th>T_c, K</th><th>P_c, MPa</th><th>ω</th><th>Role</th></tr>' + D.fluids.map(x => '<tr><td>' + x.name + '</td><td class="n">' + x.Tc + '</td><td class="n">' + x.Pc + '</td><td class="n">' + x.w + '</td><td style="color:var(--' + (x.test ? 'hot' : 'mute') + ')">' + (x.test ? 'Locked test' : 'Train · CV fold ' + (x.fold + 1)) + '</td></tr>').join('') + '</table>';
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, '3'), 'Fluids and their roles'), el('div', { class: 'scroll', html: U.eq(tb) }), el('p', { class: 'note', style: 'margin-top:10px;max-width:70ch' }, 'Critical constants and acentric factors are standard reference values (NIST Chemistry WebBook; Poling, Prausnitz and O’Connell). Only ω enters the models; T_c and P_c define the reduced variables.')));
+    }
+  });
+
+  /* ================= 03 REGRESSION ================= */
+  U.lab({
+    id: 'regression', num: '03', title: 'Regression laboratory', tags: ['OLS · Ridge · Lasso', 'Live fits on training fluids'], blurb: 'See the observations, fit them, measure the residuals and walk on a real loss surface.', keys: 'ols least squares loss residual gradient',
+    lead: 'Regression draws the surface that passes as close as possible to the observations. Here you watch that happen on the thermodynamic data, then open the objective function and look inside.',
+    render(page) {
+      U.exp(page, {
+        n: '1', title: 'Explore the observations', problem: 'What does the target look like before any model touches it?', idea: 'Plot a property against one input while holding the other inside a narrow window.', assume: 'A window of ±0.04 in T_r, or ±12 % in P_r, is treated as one slice.',
+        try: 'Choose Z against P_r and slide the window from T_r = 1.4 down to 0.8. A smooth curve develops a cliff. Click any point to read its row.', thermo: 'Above the critical temperature properties vary smoothly. Below it they jump at the saturation pressure, where vapour condenses.', conclude: 'Any model must cope with a discontinuity that moves with temperature and with ω.',
+        build(B, res) {
+          const S = { fl: TS.defaultFluid, t: 'Z', x: 'Pr', c: 0.9 }, pw = el('div'), insp = el('div', { class: 'scroll' });
+          const sc = U.slider({ label: 'Slice centre', min: 0.6, max: 1.6, step: 0.01, value: S.c, on: v => { S.c = v; upd(); } });
+          B.side.append(el('div', { class: 'fgrid' }, TS.fluidSelect('obfl', S.fl, v => { S.fl = v; upd(); })), el('div', { class: 'ctl' }, el('span', {}, 'Target variable')), TS.targetSeg(S.t, v => { S.t = v; upd(); }), el('div', { class: 'ctl', style: 'margin-top:12px' }, el('span', {}, 'Feature on the horizontal axis')), U.seg([['Pr', 'P_r at fixed T_r'], ['Tr', 'T_r at fixed P_r'], ['all', 'All rows vs P_r']], S.x, v => { S.x = v; upd(); }, 'Axis'), el('div', { style: 'height:10px' }), sc.el, TS.phaseKey(), el('div', { class: 'h4', style: 'margin-top:8px' }, 'Inspected row'), insp);
+          B.below.append(pw); let plot, idx = [];
+          const show = i => { insp.innerHTML = '<table class="mat"><tr><th>T_r</th><th>P_r</th><th>ω</th><th>Z</th><th>aʳ/RT</th><th>hʳ/RT</th><th>sʳ/R</th><th>gʳ/RT</th><th>phase</th></tr><tr><td>' + [R.Tr[i], R.Pr[i], TS.w(i)].map(v => f(v, 4)).join('</td><td>') + '</td><td>' + ['Z', 'ar', 'hr', 'sr', 'gr'].map(t => f(TS.val(i, t), 4)).join('</td><td>') + '</td><td style="color:' + TS.PHC[R.ph[i]] + '">' + TS.PH[R.ph[i]] + '</td></tr></table>'; };
+          function upd() {
+            const byT = S.x !== 'Tr', all = S.x === 'all'; sc.el.style.display = all ? 'none' : ''; sc.el.querySelector('label').innerHTML = U.eq(byT ? 'Slice centre, T_r' : 'Slice centre, P_r');
+            if (!byT) { sc.input.min = 0.05; sc.input.max = 2.5; } else { sc.input.min = 0.6; sc.input.max = 1.6; } S.c = clamp(S.c, +sc.input.min, +sc.input.max); sc.set(S.c);
+            idx = TS.rowsOf(S.fl).filter(i => all || (byT ? Math.abs(R.Tr[i] - S.c) < 0.04 : Math.abs(Math.log(R.Pr[i] / S.c)) < 0.12));
+            pw.innerHTML = ''; plot = new U.Plot(pw, { title: TS.TARGETS[S.t] + ' · ' + D.fluids[S.fl].name + ' · ' + idx.length + ' observations', xlabel: byT ? 'Pr' : 'Tr', ylabel: S.t, xlog: byT, h: 330, onClick: (x, y) => { let b = -1, bd = 1e9; idx.forEach(i => { const dx = byT ? Math.log(R.Pr[i] / x) / 4 : R.Tr[i] - x, d = dx * dx; if (d < bd) { bd = d; b = i; } }); if (b >= 0) show(b); } });
+            const w = D.fluids[S.fl].w, ref = []; if (!all) for (let i = 0; i <= 120; i++) { const u = i / 120, Tr = byT ? S.c : 0.6 + u, Pr = byT ? 0.03 * Math.pow(100, u) : S.c; ref.push([byT ? Pr : Tr, ML.pr(Tr, Pr, w)[S.t]]); }
+            plot.set({ series: [{ pts: ref, color: U.col.dim, width: 1.2 }, { pts: idx.map(i => [byT ? R.Pr[i] : R.Tr[i], TS.val(i, S.t)]), dots: true, r: 3, colors: idx.map(i => TS.PHC[R.ph[i]]), shapes: idx.map(i => R.ph[i]) }] });
+            if (idx.length) show(idx[0]); const vs = idx.map(i => TS.val(i, S.t)); res(idx.length + ' observations in the slice; ' + S.t + ' ranges from ' + f(Math.min(...vs), 3) + ' to ' + f(Math.max(...vs), 3) + '. The grey line is the reference equation of state through the slice centre.');
+          }
+          upd();
+        }
+      });
+      U.exp(page, {
+        n: '2', title: 'Understand model fitting', stage: true, problem: 'How do OLS, Ridge and Lasso approximate the same data?', idea: 'Each chooses coefficients β for the same polynomial features; they differ only in the penalty added to the squared error.', assume: 'Features are standardised with training statistics; the intercept is the training mean of the target and is never penalised.',
+        eq: [['ŷ = β_{0} + Σ_{j} β_{j} φ_{j}(T_r, P_r, ω)', 'φ_j are monomials up to the chosen degree. The model is linear in β even though it is nonlinear in the inputs.']],
+        try: 'Start at degree 1 and raise it to 5: the curve bends toward the data and the RMSE falls. Then pick Lasso and raise α until the curve flattens.', thermo: 'The white line is the reference isotherm. Below T_r = 1 no polynomial can reproduce its vertical step, so residuals pile up beside the saturation pressure.', conclude: 'More features lower the error everywhere except at the phase transition, which sets a floor on what this model family can achieve.',
+        model: 'Fitted live in your browser on all ' + TS.train.length + ' training rows (eigen-decomposition for OLS and Ridge, coordinate descent capped at 6000 sweeps for Lasso). The offline scikit-learn models are reported separately in The Model evaluation laboratory.',
+        build(B, res) {
+          const S = { fl: TS.defaultFluid, t: 'Z', kind: 'ridge', deg: 3, lam: 1e-3, Tr: 0.9 }, pw = el('div'), rd = U.readout([{ k: 'p', label: 'Coefficients' }, { k: 'sse', label: 'Sum of squared errors' }, { k: 'rmse', label: 'RMSE, training rows' }, { k: 'mae', label: 'MAE, training rows' }, { k: 'r2', label: 'R²' }, { k: 'sl', label: 'RMSE on plotted slice' }]);
+          const sl = TS.logSlider({ label: 'Penalty strength', min: -6, max: 2, value: -3, on: v => { S.lam = v; upd(); } }), cmp = el('div', { class: 'scroll' });
+          B.side.append(el('div', { class: 'ctl' }, el('span', {}, 'Model')), U.seg([['base', 'Baseline'], ['ols', 'OLS'], ['ridge', 'Ridge'], ['lasso', 'Lasso']], S.kind, v => { S.kind = v; upd(); }, 'Model'), el('div', { style: 'height:10px' }), U.slider({ label: 'Polynomial degree', min: 1, max: 5, step: 1, value: S.deg, on: v => { S.deg = v; upd(); } }).el, sl.el, el('div', { class: 'fgrid' }, TS.fluidSelect('fitfl', S.fl, v => { S.fl = v; upd(); })), el('div', { class: 'ctl' }, el('span', {}, 'Target')), TS.targetSeg(S.t, v => { S.t = v; upd(); }), el('div', { style: 'height:10px' }), U.slider({ label: 'Isotherm T_r', min: 0.62, max: 1.58, step: 0.01, value: S.Tr, on: v => { S.Tr = v; upd(); } }).el, rd);
+          B.below.append(pw, el('div', {}, el('div', { class: 'h4' }, 'What changes when you switch model (same degree, same data)'), cmp));
+          const stage = K3.stage(B.stage, { cam: [4.6, 3.6, 5.6], target: [0, 1.15, 0], label: 'Reference surface and fitted regression surface', hint: 'Reference (phase colours) under the fitted surface · drag or arrow keys', fallback: TS.fallback(D.fluids[S.fl].w, 'Z') }); let sRef, sMl, lastKind = S.kind;
+          if (stage) { stage.floor(); sRef = TS.surface(stage, { wire: 0.1 }); sMl = TS.surface(stage, { transparent: true, opacity: 0.66, depthWrite: false, wire: 0.22 }); TS.axes(stage, 'target ↑'); }
+          const plot = new U.Plot(pw, { title: 'Observations, model curve and residuals along one isotherm', xlabel: 'Pr', ylabel: 'target', xlog: true, h: 340, xr: [0.03, 3] });
+          function upd() {
+            sl.el.style.display = S.kind === 'ridge' || S.kind === 'lasso' ? '' : 'none'; const lam = S.kind === 'lasso' ? Math.min(S.lam, 1) : S.lam;
+            const P = TS.prep(S.deg, false), M = TS.fit(P, S.t, S.kind, lam), fn = TS.predictor(M), yh = ML.predict(P.X, P.n, P.p, M.beta, M.b0), e = ML.err(TS.y(P.idx, S.t), yh), w = D.fluids[S.fl].w;
+            if (stage) { const rf = TS.refField(w, S.t); let lo = 1e9, hi = -1e9; rf.forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); }); const pd = (hi - lo) * 0.08, mc = TS.rgb(TS.MC[S.kind]); sRef.setData(rf, lo - pd, hi + pd, (i, j) => TS.PHRGB[ML.phase(TS.grid(i), TS.gridP(j), w)]); sMl.setData(TS.field(w, S.t, fn), lo - pd, hi + pd, () => mc); if (lastKind !== S.kind) { stage.swing(); lastKind = S.kind; } }
+            const idx = TS.rowsOf(S.fl).filter(i => Math.abs(R.Tr[i] - S.Tr) < 0.035), ref = [], mod = []; for (let i = 0; i <= 140; i++) { const Pr = 0.03 * Math.pow(100, i / 140); ref.push([Pr, ML.pr(S.Tr, Pr, w)[S.t]]); mod.push([Pr, fn(S.Tr, Pr, w)]); }
+            const ph = idx.map(i => fn(R.Tr[i], R.Pr[i], w)), es = idx.length ? Math.sqrt(idx.reduce((a, i, k) => a + Math.pow(TS.val(i, S.t) - ph[k], 2), 0) / idx.length) : NaN;
+            plot.set({ series: [{ pts: ref, color: TS.MC.ref, width: 1.4 }, { pts: mod, color: TS.MC[S.kind], width: 2.4 }, { segs: idx.map((i, k) => [R.Pr[i], TS.val(i, S.t), R.Pr[i], ph[k]]), color: U.col.bad || '#ff5d6c', alpha: .8 }, { pts: idx.map(i => [R.Pr[i], TS.val(i, S.t)]), dots: true, r: 3, colors: idx.map(i => TS.PHC[R.ph[i]]), shapes: idx.map(i => R.ph[i]) }] });
+            rd.set({ p: S.kind === 'base' ? '1' : (P.p + 1) + (S.kind === 'lasso' ? ' (' + Array.from(M.beta).filter(b => b !== 0).length + ' non-zero)' : ''), sse: e.sse, rmse: e.rmse, mae: e.mae, r2: f(e.r2, 4), sl: es });
+            const rows = ['base', 'ols', 'ridge', 'lasso'].map(k => { const m = TS.fit(P, S.t, k, k === 'lasso' ? Math.min(S.lam, 1) : S.lam), er = ML.err(TS.y(P.idx, S.t), ML.predict(P.X, P.n, P.p, m.beta, m.b0)); let nn = 0, mx = 0, l2 = 0; m.beta.forEach(b => { if (b !== 0) nn++; mx = Math.max(mx, Math.abs(b)); l2 += b * b; }); return '<tr' + (k === S.kind ? ' class="cur"' : '') + '><td style="color:' + TS.MC[k] + '">' + TS.MN[k] + '</td><td class="n">' + f(er.rmse, 4) + '</td><td class="n">' + f(er.mae, 4) + '</td><td class="n">' + nn + '</td><td class="n">' + f(mx, 3) + '</td><td class="n">' + f(Math.sqrt(l2), 3) + '</td></tr>'; });
+            cmp.innerHTML = '<table class="t"><tr><th>Model</th><th>RMSE</th><th>MAE</th><th>Non-zero β</th><th>Largest |β|</th><th>‖β‖₂</th></tr>' + rows.join('') + '</table>';
+            res(TS.MN[S.kind] + ', degree ' + S.deg + ': training RMSE ' + f(e.rmse, 4) + ' on ' + S.t + '. The ' + idx.length + ' red sticks are residuals for ' + D.fluids[S.fl].name + ' near T_r = ' + f(S.Tr, 3) + '.');
+          }
+          upd();
+        }
+      });
+      U.exp(page, {
+        n: '3', title: 'Understand the loss function', kicker: 'Teaching demonstration · two coefficients', problem: 'What does “minimising the squared error” look like?', idea: 'With two coefficients the objective J(β) is a bowl you can draw. The fitted model is its lowest point.', assume: 'A deliberately small model, not the real one: vapour-phase training rows only, Z − 1 = β₁·(P_r/T_r) + β₂·(P_r/T_r²), no intercept.',
+        eq: [['J(β) = ‖y − Xβ‖^{2}  →  ∇J = −2X^{T}(y − Xβ)', 'Ridge adds λ‖β‖². Lasso adds 2nα‖β‖₁ in this scaling. Contours are drawn from the exact quadratic.']],
+        try: 'Click anywhere to place β, then press “Gradient step” repeatedly: it zig-zags across the narrow valley. Add a Ridge penalty and watch the valley round out and the optimum move toward the origin.', thermo: 'The two features are the first terms of a virial-type expansion. They are almost collinear, which is why the valley is so long and thin.', conclude: 'Ill-conditioning is geometry: an elongated bowl makes the optimum hard to locate and sensitive to small changes in the data.',
+        model: 'This is a two-dimensional teaching model built from ' + TS.train.filter(i => R.ph[i] === 0).length + ' real vapour-phase training rows. The research models have ' + (D.reg.powers.length + 1) + ' coefficients and cannot be drawn this way.',
+        build(B, res) {
+          const idx = TS.train.filter(i => R.ph[i] === 0), n = idx.length, X = new Float64Array(n * 2), y = new Float64Array(n); idx.forEach((i, k) => { X[k * 2] = R.Pr[i] / R.Tr[i]; X[k * 2 + 1] = R.Pr[i] / (R.Tr[i] * R.Tr[i]); y[k] = R.Z[i] - 1; });
+          const G = ML.gram(X, n, 2), b = ML.xty(X, n, 2, y), yty = y.reduce((a, c) => a + c * c, 0), E = ML.eig(G, 2), S = { pen: 'none', lam: 10, beta: [0.4, -0.2] }, pw = el('div');
+          const J = (b1, b2) => yty - 2 * (b[0] * b1 + b[1] * b2) + G[0] * b1 * b1 + 2 * G[1] * b1 * b2 + G[3] * b2 * b2 + (S.pen === 'ridge' ? S.lam * (b1 * b1 + b2 * b2) : S.pen === 'lasso' ? S.lam * (Math.abs(b1) + Math.abs(b2)) : 0);
+          const grad = (b1, b2) => [-2 * b[0] + 2 * (G[0] * b1 + G[1] * b2) + (S.pen === 'ridge' ? 2 * S.lam * b1 : S.pen === 'lasso' ? S.lam * Math.sign(b1) : 0), -2 * b[1] + 2 * (G[1] * b1 + G[3] * b2) + (S.pen === 'ridge' ? 2 * S.lam * b2 : S.pen === 'lasso' ? S.lam * Math.sign(b2) : 0)];
+          const opt = () => S.pen === 'lasso' ? Array.from(ML.lasso(G, b, n, S.lam / (2 * n), null, 5000)) : Array.from(ML.solveEig(E, b, S.pen === 'ridge' ? S.lam : 0)), ols = Array.from(ML.solveEig(E, b, 0));
+          const rd = U.readout([{ k: 'j', label: 'Objective at your β' }, { k: 'jo', label: 'Objective at the optimum' }, { k: 'b', label: 'Your β₁, β₂' }, { k: 'o', label: 'Optimal β₁, β₂' }, { k: 'g', label: 'Gradient length' }, { k: 'k', label: 'Condition number of XᵀX' }]);
+          const sl = TS.logSlider({ label: 'Penalty strength', min: -1, max: 3, value: 1, on: v => { S.lam = v; upd(); } });
+          B.side.append(el('div', { class: 'ctl' }, el('span', {}, 'Objective')), U.seg([['none', 'OLS'], ['ridge', 'Ridge (L2)'], ['lasso', 'Lasso (L1)']], S.pen, v => { S.pen = v; upd(); }, 'Objective'), el('div', { style: 'height:10px' }), sl.el, el('div', { class: 'btns' }, el('button', { class: 'btn pri', type: 'button', onclick: () => { const g = grad(S.beta[0], S.beta[1]), st = 1 / (2 * (E.val[0] + (S.pen === 'ridge' ? S.lam : 0))); S.beta = [S.beta[0] - st * g[0], S.beta[1] - st * g[1]]; S.path.push(S.beta.slice()); upd(true); } }, 'Gradient step'), el('button', { class: 'btn', type: 'button', onclick: () => { S.beta = opt(); upd(); } }, 'Jump to optimum'), el('button', { class: 'btn', type: 'button', onclick: () => { S.beta = [0.4, -0.2]; upd(); } }, 'Reset')), rd, TS.key([['Your β', TS.MC.ref], ['Optimum of this objective', TS.MC.ridge], ['OLS optimum', TS.MC.ols], ['Descent direction', U.col.warm]]));
+          B.below.append(pw); const o0 = ols, xr = [o0[0] - 0.75, o0[0] + 0.75], yr = [o0[1] - 0.75, o0[1] + 0.75]; xr[0] = Math.min(xr[0], -0.1); xr[1] = Math.max(xr[1], 0.5); yr[0] = Math.min(yr[0], -0.5); yr[1] = Math.max(yr[1], 0.1);
+          const plot = new U.Plot(pw, { title: 'Contours of J(β₁, β₂) · click to move β', xlabel: 'β₁  (coefficient of Pr / Tr)', ylabel: 'β₂  (coefficient of Pr / Tr²)', h: 420, xr, yr, onClick: (x, y2) => { S.beta = [x, y2]; upd(); } });
+          function upd(keep) {
+            if (!keep) S.path = [S.beta.slice()]; sl.el.style.display = S.pen === 'none' ? 'none' : '';
+            const nx = 70, xs = [], ys = [], v = new Float64Array(nx * nx); for (let i = 0; i < nx; i++) { xs.push(xr[0] + (xr[1] - xr[0]) * i / (nx - 1)); ys.push(yr[0] + (yr[1] - yr[0]) * i / (nx - 1)); } for (let j = 0; j < nx; j++) for (let i = 0; i < nx; i++) v[j * nx + i] = J(xs[i], ys[j]);
+            const o = opt(), jo = J(o[0], o[1]), jm = Math.max(...v), lv = []; for (let k = 1; k <= 14; k++) lv.push(jo + (jm - jo) * Math.pow(k / 14, 3)); const g = grad(S.beta[0], S.beta[1]), gl = Math.hypot(g[0], g[1]) || 1, a = 0.18;
+            plot.set({ contours: [{ nx, ny: nx, xs, ys, v, levels: lv, color: 'rgba(255,255,255,.3)' }], series: [{ pts: S.path, color: U.col.mute, width: 1.2 }, { segs: [[S.beta[0], S.beta[1], S.beta[0] - a * g[0] / gl, S.beta[1] - a * g[1] / gl]], color: U.col.warm, width: 2.5 }], points: [{ x: ols[0], y: ols[1], color: TS.MC.ols, label: 'OLS' }, { x: o[0], y: o[1], color: TS.MC.ridge, ring: true }, { x: S.beta[0], y: S.beta[1], color: TS.MC.ref, r: 5 }, { x: 0, y: 0, color: U.col.dim, label: '0', r: 2.5 }] });
+            const kap = (E.val[0] + (S.pen === 'ridge' ? S.lam : 0)) / (E.val[1] + (S.pen === 'ridge' ? S.lam : 0)); rd.set({ j: J(S.beta[0], S.beta[1]), jo, b: f(S.beta[0], 3) + ', ' + f(S.beta[1], 3), o: f(o[0], 3) + ', ' + f(o[1], 3), g: gl, k: kap });
+            res('Optimum at β = (' + f(o[0], 4) + ', ' + f(o[1], 4) + '), J = ' + f(jo, 4) + '. The bowl is ' + f(Math.sqrt(kap), 3) + ' times longer than it is wide' + (S.pen === 'ridge' ? ' with the Ridge penalty; without it the ratio is ' + f(Math.sqrt(E.val[0] / E.val[1]), 3) + '.' : '.') + (S.pen === 'lasso' && (o[0] === 0 || o[1] === 0) ? ' Lasso has set one coefficient exactly to zero.' : ''));
+          }
+          upd();
+        }
+      });
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, '4–5'), 'Continue'), el('div', { class: 'cards' }, el('a', { class: 'card', href: '#gram' }, el('small', {}, 'Experiment 4'), el('h3', {}, 'Polynomial feature expansion'), el('p', {}, 'Build the design matrix degree by degree and inspect its rank, singular values and condition number.')), el('a', { class: 'card', href: '#regularisation' }, el('small', {}, 'Experiment 5'), el('h3', {}, 'Compare regression methods'), el('p', {}, 'Coefficient paths, shrinkage, sparsity and the bias–variance trade-off, with the official fitted coefficients.')))));
+    }
+  });
+
+  /* ================= 04 GRAM ================= */
+  U.lab({
+    id: 'gram', num: '04', title: 'Polynomial features & Gram matrix', tags: ['Numerical linear algebra', 'Computed live from the training matrix'], blurb: 'Why XᵀX goes bad as the degree rises, and exactly how λI repairs it.', keys: 'design matrix condition number eigenvalues singular values hessian ill-conditioned',
+    lead: 'Least squares is solved through the Gram matrix G = X^{T}X. When polynomial features repeat each other, G has directions with almost no curvature, and the solution along them is decided by rounding error.',
+    render(page) {
+      U.exp(page, {
+        n: '1', title: 'Expand the features and inspect the matrix', stage: true, problem: 'How do three inputs become a design matrix, and how healthy is that matrix?', idea: 'Every monomial T_r^{a} P_r^{b} ω^{c} with a+b+c ≤ d becomes a column. Their inner products form G; the eigenvalues of G are the squared singular values of X.',
+        assume: '<b>Standardised:</b> each column has its training mean removed and is divided by its training standard deviation; the intercept is handled by centring y, so G/n is the feature correlation matrix. <b>Raw:</b> untouched columns plus a column of ones, nothing centred.',
+        eq: [['G = X^{T}X = VΛV^{T} ,  κ(X) = \\frac{σ_{max}}{σ_{min}} ,  κ(G) = κ(X)^{2}', 'Numerical rank counts singular values above max(n, p)·ε·σ_{max} with ε = 2.2×10^{−16}.'], ['H_{ridge} = X^{T}X + λI  ⇒  λ_{i} → λ_{i} + λ', 'Ridge adds the same amount to every eigenvalue. Large ones barely notice; tiny ones are lifted off the floor.']],
+        try: 'Raise the degree from 2 to 5 and watch the smallest eigenvalue collapse. Switch scaling to Raw: the condition number grows by orders of magnitude. Then raise λ and watch the spectrum’s tail lift and the coefficients calm down.', thermo: 'T_r only spans 0.6–1.6 and ω only 0–0.4, so T_r², T_r³ and T_r·ω look almost like copies of T_r over the data. The physics gives narrow ranges; the algebra pays for it.', conclude: 'Standardising helps but does not cure high-degree collinearity. A small ridge penalty bounds the condition number at (λ_{max} + λ)/λ and costs almost nothing in accuracy.',
+        model: 'All quantities are computed in your browser from the actual training design matrix (' + TS.train.length + ' rows): Gram matrix, cyclic Jacobi eigen-decomposition, least-squares and ridge solutions, and five-fold cross-validation grouped by fluid with scaling refitted in every fold. Eigenvalues below about 10⁻¹⁶·λ_{max} are at the limit of double precision.',
+        build(B, res) {
+          const S = { deg: 3, raw: false, lam: 1e-3, t: 'Z' }, hm = el('div'), sp = el('div'), cf = el('div'), mat = el('div', { class: 'scroll' }), ell = el('canvas', { style: 'width:100%;height:200px;display:block', role: 'img', 'aria-label': 'Loss contour in the plane of the strongest and weakest eigen-directions' });
+          const rd = U.readout([{ k: 'dim', label: 'Matrix dimensions n × p' }, { k: 'rank', label: 'Numerical rank' }, { k: 'kx', label: 'κ(X) = σ_{max} / σ_{min}' }, { k: 'kg', label: 'κ(G), OLS' }, { k: 'kr', label: 'κ(G + λI), Ridge' }, { k: 'cvo', label: 'Grouped-CV RMSE, OLS' }, { k: 'cvr', label: 'Grouped-CV RMSE, Ridge' }, { k: 'bo', label: 'Largest |β|: OLS → Ridge' }]);
+          B.side.append(U.slider({ label: 'Polynomial degree', min: 1, max: 5, step: 1, value: S.deg, on: v => { S.deg = v; upd(); } }).el, el('div', { class: 'ctl' }, el('span', {}, 'Feature scaling')), U.seg([['std', 'Standardised'], ['raw', 'Raw + intercept column']], 'std', v => { S.raw = v === 'raw'; upd(); }, 'Scaling'), el('div', { style: 'height:10px' }), TS.logSlider({ label: 'Regularisation strength', min: -10, max: 4, step: 0.5, value: -3, on: v => { S.lam = v; upd(); } }).el, rd, el('div', { class: 'h4', style: 'margin-top:6px' }, 'Loss contour: strongest vs weakest direction'), ell, el('p', { class: 'note', html: 'Axis ratio = √κ. Dashed: OLS. Solid green: Ridge. Ratios above 40 are drawn at 40 and labelled with the true value.' }));
+          B.below.append(el('div', {}, hm, el('div', { class: 'h4', style: 'margin-top:14px' }, 'Design matrix, first rows'), mat), el('div', {}, sp, cf));
+          const heat = new U.Heat(hm, { title: 'Gram matrix as feature similarity', h: 300 }), spec = new U.Plot(sp, { title: 'Eigenvalue spectrum of G (singular values are the square roots)', xlabel: 'index i', ylabel: 'eigenvalue λ_i', ylog: true, h: 240 }), coef = new U.Plot(cf, { title: 'Coefficient magnitudes |β_j|', xlabel: 'feature index j', ylabel: '|β|', ylog: true, h: 220 });
+          let anim = { o: 1, r: 1, to: 1, tr: 1 };
+          const stage = K3.stage(B.stage, { cam: [4.4, 4.2, 5.2], target: [0, 1.0, 0], autoRotate: true, label: 'Loss surface along the strongest and weakest eigen-directions, OLS and Ridge', hint: 'Loss bowl: OLS (orange) and Ridge (green) · height is log-compressed', fallback: TS.fallback(0.152, 'Z') }); let bO, bR, kO = 1, kR = 1;
+          if (stage) { stage.floor(); bO = TS.surface(stage, { transparent: true, opacity: 0.55, depthWrite: false, wire: 0.3 }); bR = TS.surface(stage, { transparent: true, opacity: 0.7, wire: 0.2 }); stage.annotate(new THREE.Vector3(1.9, 0.2, 0), 'strongest direction v₁'); stage.annotate(new THREE.Vector3(0, 0.2, -1.9), 'weakest direction v_p'); stage.annotate(new THREE.Vector3(-1.75, 2.5, 1.75), 'J ↑ (log scale)'); }
+          const bowl = (s, kap, c) => { const n = TS.NX, v = new Float64Array(n * n); for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const u = -1 + 2 * i / (n - 1), w2 = -1 + 2 * j / (n - 1); v[j * n + i] = Math.log10(1 + 1000 * (u * u + w2 * w2 / kap)) / 3.31; } s.setData(v, 0, 1, () => c); };
+          function upd() {
+            const P = TS.prep(S.deg, S.raw), p = P.p, ev = P.E.val.map(v => Math.max(v, 0)), eps = 2.220446e-16, smax = Math.sqrt(ev[0]), tol = Math.max(P.n, p) * eps * smax, rank = ev.filter(v => Math.sqrt(v) > tol).length, emin = Math.max(ev[p - 1], ev[0] * 1e-17);
+            const C = new Float64Array(p * p); for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) C[i * p + j] = P.G[i * p + j] / Math.sqrt(P.G[i * p + i] * P.G[j * p + j]); heat.set(C, { rows: p, cols: p, names: P.names, max: 1 });
+            heat.ttl.textContent = S.raw ? 'Cosine similarity between raw columns (XᵀX normalised)' : 'Correlation between standardised features (XᵀX / n)';
+            const o = TS.fit(P, S.t, 'ols'), r = TS.fit(P, S.t, 'ridge', S.lam), mo = Math.max(...Array.from(o.beta, Math.abs)), mr = Math.max(...Array.from(r.beta, Math.abs)), cvo = TS.cv(S.deg, S.raw, S.t, 'ols', [0])[0], cvr = TS.cv(S.deg, S.raw, S.t, 'ridge', [S.lam])[0];
+            spec.set({ series: [{ pts: ev.map((v, i) => [i + 1, Math.max(v, ev[0] * 1e-18)]), color: TS.MC.ols, width: 2 }, { pts: ev.map((v, i) => [i + 1, v + S.lam]), color: TS.MC.ridge, width: 2 }, { pts: [[1, S.lam], [p, S.lam]], color: U.col.dim, dash: [4, 4] }], points: [{ x: p, y: Math.max(ev[p - 1], ev[0] * 1e-18), color: TS.MC.ols, label: 'smallest', left: true }, { x: p, y: ev[p - 1] + S.lam, color: TS.MC.ridge }] });
+            coef.set({ series: [{ pts: Array.from(o.beta, (v, j) => [j + 1, Math.max(Math.abs(v), 1e-8)]), color: TS.MC.ols, width: 1.6 }, { pts: Array.from(r.beta, (v, j) => [j + 1, Math.max(Math.abs(v), 1e-8)]), color: TS.MC.ridge, width: 1.6 }] });
+            const kg = ev[0] / emin, kr = (ev[0] + S.lam) / (ev[p - 1] + S.lam); rd.set({ dim: P.n + ' × ' + p, rank: rank + ' of ' + p, kx: Math.sqrt(kg), kg, kr, cvo, cvr, bo: f(mo, 3) + ' → ' + f(mr, 3) }); anim.to = Math.sqrt(kg); anim.tr = Math.sqrt(kr);
+            const nc = Math.min(p, 7), rows = [0, 1, 2, 3, 4]; mat.innerHTML = '<table class="mat"><tr>' + P.names.slice(0, nc).map(n => '<th>' + n + '</th>').join('') + (p > nc ? '<th>… ' + (p - nc) + ' more</th>' : '') + '</tr>' + rows.map(i => '<tr>' + Array.from({ length: nc }, (_, j) => '<td>' + f(P.X[i * p + j], 3) + '</td>').join('') + (p > nc ? '<td>…</td>' : '') + '</tr>').join('') + '</table>';
+            res('Degree ' + S.deg + ', ' + (S.raw ? 'raw' : 'standardised') + ': ' + p + ' columns, numerical rank ' + rank + ', κ(G) = ' + f(kg, 3) + '. Adding λ = ' + f(S.lam, 2) + ' gives κ = ' + f(kr, 3) + ' and changes grouped-CV RMSE from ' + f(cvo, 4) + ' to ' + f(cvr, 4) + '. Largest coefficient: ' + f(mo, 3) + ' → ' + f(mr, 3) + '.');
+          }
+          U.loop(dt => {
+            const k = Math.min(1, dt * 5); anim.o += (anim.to - anim.o) * k; anim.r += (anim.tr - anim.r) * k; const w = ell.clientWidth, h = ell.clientHeight, d = Math.min(2, devicePixelRatio || 1); if (!w) return; if (ell.width !== Math.round(w * d)) { ell.width = Math.round(w * d); ell.height = Math.round(h * d); }
+            const c = ell.getContext('2d'); c.setTransform(d, 0, 0, d, 0, 0); c.clearRect(0, 0, w, h); const A = w * 0.44, draw = (ratio, col, dash) => { const rr = Math.min(40, ratio), b = Math.max(1.5, A / rr); c.save(); c.translate(w / 2, h / 2 - 8); c.rotate(-0.35); c.setLineDash(dash); c.strokeStyle = col; c.lineWidth = 2; for (const s of [1, 0.6]) { c.beginPath(); c.ellipse(0, 0, A * s, Math.max(1, b * s), 0, 0, 7); c.stroke(); } c.restore(); c.setLineDash([]); };
+            if (stage && (Math.abs(anim.o - kO) > 1e-3 * kO || Math.abs(anim.r - kR) > 1e-3 * kR)) { kO = anim.o; kR = anim.r; bowl(bO, kO * kO, [255, 107, 58]); bowl(bR, kR * kR, [98, 219, 166]); }
+            draw(anim.o, TS.MC.ols, [5, 4]); draw(anim.r, TS.MC.ridge, []); c.font = '11px JetBrains Mono, monospace'; c.fillStyle = TS.MC.ols; c.textAlign = 'left'; c.fillText('OLS  √κ = ' + f(anim.to, 3), 6, h - 6); c.fillStyle = TS.MC.ridge; c.textAlign = 'right'; c.fillText('Ridge  √κ = ' + f(anim.tr, 3), w - 6, h - 6);
+          });
+          upd();
+        }
+      });
+      const tb = '<table class="t"><tr><th>Degree</th><th>Features p</th><th>OLS</th><th>Ridge (best λ)</th><th>Lasso (best α)</th></tr>' + D.cvTable.map(r => '<tr' + (r.deg === DEG ? ' class="cur"' : '') + '><td class="n">' + r.deg + '</td><td class="n">' + r.p + '</td><td class="n">' + f(r.ols, 4) + '</td><td class="n">' + f(r.ridge, 4) + '  <span class="mute">(' + f(r.ridgeLam, 2) + ')</span></td><td class="n">' + (r.lasso == null ? 'not run' : f(r.lasso, 4) + '  <span class="mute">(' + f(r.lassoAlpha, 2) + ')</span>') + '</td></tr>').join('') + '</table>';
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, '2'), 'Official record · how complexity affects the regression'), el('div', { class: 'scroll', html: tb }), el('p', { class: 'note', style: 'margin-top:10px;max-width:72ch', html: 'Grouped five-fold cross-validation RMSE on Z, computed offline with scikit-learn on training fluids only. Degree ' + DEG + ' had the lowest Ridge error and was fixed for every official model. The live numbers above should agree with the OLS and Ridge columns. Lasso was cross-validated only at the selected degree.' })));
+    }
+  });
+
+  /* ================= 05 REGULARISATION ================= */
+  U.lab({
+    id: 'regularisation', num: '05', title: 'Regularisation laboratory', tags: ['Coefficient paths', 'Training-only experiments'], blurb: 'Shrinkage against sparsity: trace every coefficient as the penalty grows.', keys: 'ridge lasso l1 l2 shrinkage sparsity bias variance lambda',
+    lead: 'A penalty trades a little bias for a lot of stability. Ridge shrinks every coefficient smoothly; Lasso drives some to exactly zero and so chooses features.',
+    render(page) {
+      U.exp(page, {
+        n: '1', title: 'Coefficient paths and cross-validation', problem: 'How strongly should the coefficients be penalised?', idea: 'Fit the model at many penalty strengths, watch each coefficient’s path, and let grouped cross-validation choose.', assume: 'Standardised features, unpenalised intercept. Paths use all training fluids; the validation curve uses five folds grouped by fluid. The test set is not touched.',
+        eq: [['OLS:  min_{β} ‖y − Xβ‖^{2}', 'No penalty. The solution is unique only if G is well conditioned.'], ['Ridge:  min_{β} ‖y − Xβ‖^{2} + λ‖β‖_{2}^{2}  ⇒  β = (X^{T}X + λI)^{−1}X^{T}y', 'Shrinks coefficients toward zero, most strongly along weak eigen-directions. None becomes exactly zero.'], ['Lasso:  min_{β} \\frac{1}{2n}‖y − Xβ‖^{2} + α‖β‖_{1}', 'The corner of the L1 ball sets coefficients exactly to zero: built-in feature selection.']],
+        try: 'Choose Lasso and drag the penalty from left to right: coefficients drop out one at a time and the count of non-zeros falls. Switch to Ridge: every path shrinks but none touches zero.', thermo: 'Lasso’s survivors at strong penalties are low-order terms in P_r and T_r, the same terms a truncated virial expansion would keep.', conclude: 'Validation error is flat over many decades of weak penalty and rises once the penalty removes real signal. With noise-free data there is little variance to trade away, so the best penalties are small.',
+        model: 'Paths and validation curves are computed live (Ridge in closed form from the eigen-decomposition; Lasso by coordinate descent with warm starts, capped at 6000 sweeps per penalty, so the weakest Lasso penalties are approximate at high degree). Official offline values are in the table below.',
+        build(B, res) {
+          const S = { kind: 'lasso', deg: 3, t: 'Z', li: 12 }, grids = { ridge: Array.from({ length: 25 }, (_, i) => Math.pow(10, -6 + i * 0.375)), lasso: Array.from({ length: 21 }, (_, i) => Math.pow(10, -5 + i * 0.25)) };
+          const pp = el('div'), cp = el('div'), bars = el('div', { class: 'scroll' }), rd = U.readout([{ k: 'lam', label: 'Selected penalty' }, { k: 'nz', label: 'Non-zero coefficients' }, { k: 'tr', label: 'Training RMSE' }, { k: 'cv', label: 'Grouped-CV RMSE' }, { k: 'best', label: 'Penalty with lowest CV error' }, { k: 'l2', label: '‖β‖₂ (standardised)' }]);
+          const sl = U.slider({ label: 'Penalty (position on the grid)', min: 0, max: 20, step: 1, value: S.li, fmt: v => f(grids[S.kind][v], 3), on: v => { S.li = v; show(); } });
+          B.side.append(el('div', { class: 'ctl' }, el('span', {}, 'Method')), U.seg([['ridge', 'Ridge (L2)'], ['lasso', 'Lasso (L1)']], S.kind, v => { S.kind = v; S.li = Math.min(S.li, grids[v].length - 1); sl.input.max = grids[v].length - 1; calc(); }, 'Method'), el('div', { style: 'height:10px' }), U.slider({ label: 'Polynomial degree', min: 1, max: 5, step: 1, value: S.deg, on: v => { S.deg = v; calc(); } }).el, el('div', { class: 'ctl' }, el('span', {}, 'Target')), TS.targetSeg(S.t, v => { S.t = v; calc(); }), el('div', { style: 'height:10px' }), sl.el, rd);
+          B.below.append(pp, cp, el('div', { style: 'grid-column:1/-1' }, el('div', { class: 'h4' }, 'Largest coefficients at the selected penalty, beside OLS'), bars));
+          const path = new U.Plot(pp, { title: 'Coefficient paths', xlabel: 'penalty', ylabel: 'standardised coefficient β_j', xlog: true, h: 320 }), cvp = new U.Plot(cp, { title: 'Error against penalty', xlabel: 'penalty', ylabel: 'RMSE', xlog: true, h: 320 });
+          let P, fits, cv, tr, ols;
+          function calc() {
+            const g = grids[S.kind]; P = TS.prep(S.deg, false); fits = new Array(g.length); let warm = null; for (let i = g.length - 1; i >= 0; i--) { fits[i] = TS.fit(P, S.t, S.kind, g[i], warm); if (S.kind === 'lasso') warm = fits[i].beta; }
+            const y = TS.y(P.idx, S.t); tr = fits.map(m => ML.err(y, ML.predict(P.X, P.n, P.p, m.beta, m.b0)).rmse); cv = TS.cv(S.deg, false, S.t, S.kind, g); ols = TS.fit(P, S.t, 'ols'); sl.set(S.li); show();
+          }
+          function show() {
+            const g = grids[S.kind], m = fits[S.li], p = P.p, order = Array.from({ length: p }, (_, j) => j).sort((a, b) => Math.max(...fits.map(q => Math.abs(q.beta[b]))) - Math.max(...fits.map(q => Math.abs(q.beta[a])))), top = order.slice(0, 6), pal = ['#ff6b3a', '#62dba6', '#f470b8', '#5cc6ff', '#ffb24a', '#c7a2ff'];
+            path.set({ series: order.slice().reverse().map(j => ({ pts: g.map((l, i) => [l, fits[i].beta[j]]), color: top.includes(j) ? pal[top.indexOf(j)] : U.col.dim, width: top.includes(j) ? 2 : 1, alpha: top.includes(j) ? 1 : .6 })).concat([{ pts: [[g[S.li], -1e9], [g[S.li], 1e9]], color: '#fff', dash: [4, 4] }]), yr: (() => { let lo = 0, hi = 0; fits.forEach(q => q.beta.forEach(b => { lo = Math.min(lo, b); hi = Math.max(hi, b); })); const c = Math.min(Math.max(hi, -lo), 50); return [Math.max(lo, -c) * 1.05, Math.min(hi, c) * 1.05]; })() });
+            const bi = cv.indexOf(Math.min(...cv)); cvp.set({ series: [{ pts: g.map((l, i) => [l, tr[i]]), color: U.col.mute, width: 1.6 }, { pts: g.map((l, i) => [l, cv[i]]), color: TS.MC[S.kind], width: 2.4 }], points: [{ x: g[bi], y: cv[bi], color: TS.MC[S.kind], label: 'CV minimum' }, { x: g[S.li], y: cv[S.li], ring: true, color: '#fff' }, { x: g[0], y: tr[0], color: U.col.mute, label: 'training', r: 2 }] });
+            const nz = Array.from(m.beta).filter(b => b !== 0).length; rd.set({ lam: f(g[S.li], 3), nz: nz + ' of ' + p, tr: tr[S.li], cv: cv[S.li], best: f(g[bi], 3), l2: Math.sqrt(Array.from(m.beta).reduce((a, b) => a + b * b, 0)) });
+            const mx = Math.max(...top.map(j => Math.abs(m.beta[j])), 1e-12), mo = Math.max(...top.map(j => Math.abs(ols.beta[j])), 1e-12);
+            bars.innerHTML = '<table class="t"><tr><th>Feature</th><th>OLS β</th><th></th><th>' + TS.MN[S.kind] + ' β</th><th></th></tr>' + top.map((j, k) => '<tr><td style="color:' + pal[k] + '">' + P.names[j] + '</td><td class="n">' + f(ols.beta[j], 4) + '</td><td><div class="bar"><i style="width:' + Math.abs(ols.beta[j]) / mo * 100 + '%;background:' + TS.MC.ols + '"></i></div></td><td class="n">' + (m.beta[j] === 0 ? '0 (removed)' : f(m.beta[j], 4)) + '</td><td><div class="bar"><i style="width:' + Math.abs(m.beta[j]) / mx * 100 + '%;background:' + TS.MC[S.kind] + '"></i></div></td></tr>').join('') + '</table>';
+            res(TS.MN[S.kind] + ' at penalty ' + f(g[S.li], 3) + ': ' + nz + ' of ' + p + ' coefficients are non-zero, training RMSE ' + f(tr[S.li], 4) + ', grouped-CV RMSE ' + f(cv[S.li], 4) + '. Lowest CV error on this grid is ' + f(cv[bi], 4) + ' at ' + f(g[bi], 3) + '.' + (S.kind === 'lasso' && !m.beta.converged ? ' Coordinate descent hit its sweep cap here, so this point is approximate.' : ''));
+          }
+          calc();
+        }
+      });
+      const rows = t => ['base', 'ols', 'ridge', 'lasso'].map(k => { const m = D.reg.targets[t][k]; return '<tr><td style="color:' + TS.MC[k] + '">' + TS.MN[k] + '</td><td class="n">' + (m.lam == null ? '—' : f(m.lam, 3)) + '</td><td class="n">' + (m.nnz == null ? '1' : m.nnz + ' + intercept') + '</td><td class="n">' + (m.cv == null ? '—' : f(m.cv, 4)) + '</td><td class="n">' + f(m.test.rmse, 4) + '</td><td class="n">' + f(m.test.mae, 4) + '</td><td class="n">' + f(m.test.r2, 4) + '</td></tr>'; }).join('');
+      const tgt = el('div', { class: 'scroll' }), draw = t => { tgt.innerHTML = '<table class="t"><tr><th>Model</th><th>Penalty chosen by CV</th><th>Non-zero coefficients</th><th>Grouped-CV RMSE</th><th>Test RMSE</th><th>Test MAE</th><th>Test R²</th></tr>' + rows(t) + '</table>'; };
+      page.append(el('section', { class: 'step' }, el('div', { class: 'lab' }, el('b', {}, '2'), 'Official comparison · degree ' + DEG + ', scikit-learn, locked test fluids'), TS.targetSeg('Z', draw), el('div', { style: 'height:12px' }), tgt, el('div', { class: 'flow after' }, ...[['Bias–variance', 'A penalty adds bias (coefficients are pulled from their least-squares values) and removes variance (they stop reacting to quirks of the training fluids). Here the data are noise-free and plentiful, so variance is small and the chosen penalties sit at the weak end of the grid.'], ['Reading the table', 'OLS and Ridge are indistinguishable in accuracy; Ridge buys numerical stability, not accuracy. Lasso gives up some accuracy in exchange for fewer active terms.']].map(r => el('div', { class: 'fl' }, el('b', {}, r[0]), el('span', {}, r[1]))))));
+      draw('Z');
+    }
+  });
+})();
