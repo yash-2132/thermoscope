@@ -147,8 +147,8 @@ Python 3.13.18, NumPy 2.5.3, pandas 3.0.5, SciPy 1.18.1, scikit-learn 1.9.1; gen
 
 ## AI-use disclosure
 
-See `AI_USE.md`. An AI assistant (Claude, Anthropic) wrote the code, the website and the documentation and ran the
-experiments, under the team's direction.
+See `AI_USE.md`. In short: the team chose the research question, the models and the evaluation design;
+Claude (Anthropic) wrote the code, the website and the documentation and ran the experiments.
 
 ## References
 
