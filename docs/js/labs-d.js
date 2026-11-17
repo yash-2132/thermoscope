@@ -162,7 +162,7 @@
 
   /* ================= REPRODUCIBILITY ================= */
   U.lab({
-    id: 'repro', title: 'Reproducibility & repository', tags: ['Code', 'Outputs', 'AI-use disclosure'], blurb: 'Repository layout, commands, the file behind every figure, software versions, AI disclosure and references.', keys: 'repository github reproduce commands versions ai disclosure references',
+    id: 'repro', title: 'Reproducibility & repository', tags: ['Code', 'Outputs', 'References'], blurb: 'Repository layout, commands, the file behind every figure, software versions, AI disclosure and references.', keys: 'repository github reproduce commands versions ai disclosure references',
     lead: 'Every number on this site is exported by one command from the repository. This page says which file holds it and how to regenerate it.',
     render(page) {
       const V = M.versions;
