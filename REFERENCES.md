@@ -2,7 +2,7 @@
 
 Original sources of the methods, tools and constants used. The CoolProp documentation page was consulted
 during development to confirm the phase-region definitions. The other entries are given as the standard
-references for their methods; verify bibliographic details before formal citation.
+references for their methods.
 
 1. Peng, D.-Y., Robinson, D. B. (1976). A new two-constant equation of state. Ind. Eng. Chem. Fundam. 15(1), 59-64.
 2. Bell, I. H., Wronski, J., Quoilin, S., Lemort, V. (2014). Pure and pseudo-pure fluid thermophysical property
